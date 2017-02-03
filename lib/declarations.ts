@@ -239,11 +239,12 @@ interface IiOSNotification {
 }
 
 interface IiOSNotificationService {
-	awaitNotification(npc: Mobile.INotificationProxyClient, notification: string, timeout: number): Promise<string>;
+	awaitNotification(deviceIdentifier: string, notification: string, timeout: number): Promise<string>;
+	postNotificationAndAttachForData(deviceIdentifier: string, notification: string): Promise<void>;
 }
 
 interface IiOSSocketRequestExecutor {
-	executeLaunchRequest(device: Mobile.IiOSDevice, timeout: number, readyForAttachTimeout: number, shouldBreak?: boolean): Promise<void>;
+	executeLaunchRequest(deviceIdentifier: string, timeout: number, readyForAttachTimeout: number, shouldBreak?: boolean): Promise<void>;
 	executeAttachRequest(device: Mobile.IiOSDevice, timeout: number): Promise<void>;
 }
 
