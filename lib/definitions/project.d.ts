@@ -60,14 +60,13 @@ interface IProjectData {
 }
 
 interface IProjectDataService {
-	initialize(projectDir: string): void;
 
 	/**
 	 * Returns a value from `nativescript` key in project's package.json.
 	 * @param {string} propertyName The name of the property to be checked in `nativescript` key.
 	 * @returns {any} The value of the property.
 	 */
-	getValue(propertyName: string): any;
+	getValue(projectDir: string, propertyName: string): any;
 
 	/**
 	 * Sets a value in the `nativescript` key in a project's package.json.
@@ -75,21 +74,21 @@ interface IProjectDataService {
 	 * @param {any} value Value of the key to be added to `nativescript` key in project's package.json.
 	 * @returns {void}
 	 */
-	setValue(key: string, value: any): void;
+	setValue(projectDir: string, key: string, value: any): void;
 
 	/**
 	 * Removes a property from `nativescript` key in project's package.json.
 	 * @param {string} propertyName The name of the property to be removed from `nativescript` key.
 	 * @returns {void}
 	 */
-	removeProperty(propertyName: string): void;
+	removeProperty(projectDir: string, propertyName: string): void;
 
 	/**
 	 * Removes dependency from package.json
 	 * @param {string} dependencyName Name of the dependency that has to be removed.
 	 * @returns {void}
 	 */
-	removeDependency(dependencyName: string): void;
+	removeDependency(projectDir: string, dependencyName: string): void;
 }
 
 /**

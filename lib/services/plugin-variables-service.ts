@@ -23,14 +23,12 @@ export class PluginVariablesService implements IPluginVariablesService {
 		});
 
 		if (!_.isEmpty(values)) {
-			this.$projectDataService.initialize(this.$projectData.projectDir);
-			this.$projectDataService.setValue(this.getPluginVariablePropertyName(pluginData.name), values);
+			this.$projectDataService.setValue(this.$projectData.projectDir, this.getPluginVariablePropertyName(pluginData.name), values);
 		}
 	}
 
 	public removePluginVariablesFromProjectFile(pluginName: string): void {
-		this.$projectDataService.initialize(this.$projectData.projectDir);
-		this.$projectDataService.removeProperty(this.getPluginVariablePropertyName(pluginName));
+		this.$projectDataService.removeProperty(this.$projectData.projectDir, this.getPluginVariablePropertyName(pluginName));
 	}
 
 	public async interpolatePluginVariables(pluginData: IPluginData, pluginConfigurationFilePath: string): Promise<void> {
@@ -97,8 +95,7 @@ export class PluginVariablesService implements IPluginVariablesService {
 
 		variableData.name = pluginVariableName;
 
-		this.$projectDataService.initialize(this.$projectData.projectDir);
-		let pluginVariableValues = this.$projectDataService.getValue(this.getPluginVariablePropertyName(pluginData.name));
+		const pluginVariableValues = this.$projectDataService.getValue(this.$projectData.projectDir, this.getPluginVariablePropertyName(pluginData.name));
 		variableData.value = pluginVariableValues ? pluginVariableValues[pluginVariableName] : undefined;
 
 		return variableData;

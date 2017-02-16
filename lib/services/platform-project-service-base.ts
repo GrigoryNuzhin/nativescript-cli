@@ -23,8 +23,6 @@ export class PlatformProjectServiceBase implements IPlatformProjectServiceBase {
 	}
 
 	protected getFrameworkVersion(runtimePackageName: string): string {
-		this.$projectDataService.initialize(this.$projectData.projectDir);
-		let frameworkVersion = this.$projectDataService.getValue(runtimePackageName).version;
-		return frameworkVersion;
+		return this.$projectDataService.getValue(this.$projectData.projectDir, runtimePackageName).version;
 	}
 }
