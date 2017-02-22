@@ -4,14 +4,29 @@ export class RunCommandBase {
 		protected $options: IOptions) { }
 
 	public async executeCore(args: string[]): Promise<void> {
-		await this.$platformService.deployPlatform(args[0]);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		const deployOptions: IDeployPlatformOptions = {
+			clean: this.$options.clean,
+			device: this.$options.device,
+			emulator: this.$options.emulator,
+			projectDir: this.$options.path,
+			platformTemplate: this.$options.platformTemplate,
+			release: this.$options.release
+		};
+		await this.$platformService.deployPlatform(args[0], appFilesUpdaterOptions, deployOptions);
 
 		if (this.$options.bundle) {
 			this.$options.watch = false;
 		}
 
 		if (this.$options.release) {
-			return this.$platformService.runPlatform(args[0]);
+			const deployOptions: IRunPlatformOptions = {
+				device: this.$options.device,
+				emulator: this.$options.emulator,
+				justlaunch: this.$options.justlaunch,
+			}
+
+			return this.$platformService.runPlatform(args[0], deployOptions);
 		}
 
 		return this.$usbLiveSyncService.liveSync(args[0]);

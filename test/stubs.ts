@@ -597,7 +597,7 @@ export class PlatformServiceStub implements IPlatformService {
 		return Promise.resolve();
 	}
 
-	public preparePlatform(platform: string, changesInfo?: IProjectChangesInfo): Promise<boolean> {
+	public preparePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<boolean> {
 		return Promise.resolve(true);
 	}
 
@@ -613,23 +613,23 @@ export class PlatformServiceStub implements IPlatformService {
 		return true;
 	}
 
-	public installApplication(device: Mobile.IDevice): Promise<void> {
+	public installApplication(device: Mobile.IDevice, release: boolean): Promise<void> {
 		return Promise.resolve();
 	}
 
-	public deployPlatform(platform: string, forceInstall?: boolean): Promise<void> {
+	public deployPlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, deployOptions: IDeployPlatformOptions): Promise<void> {
 		return Promise.resolve();
 	}
 
-	public runPlatform(platform: string): Promise<void> {
+	public runPlatform(platform: string, runOptions: IRunPlatformOptions): Promise<void> {
 		return Promise.resolve();
 	}
 
-	public emulatePlatform(platform: string): Promise<void> {
+	public emulatePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, emulateOptions: IEmulatePlatformOptions): Promise<void> {
 		return Promise.resolve();
 	}
 
-	public cleanDestinationApp(platform: string): Promise<void> {
+	public cleanDestinationApp(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<void> {
 		return Promise.resolve();
 	}
 

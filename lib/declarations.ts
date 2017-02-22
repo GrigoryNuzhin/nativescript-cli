@@ -60,14 +60,44 @@ interface IPlatformLiveSyncService {
 	refreshApplication(deviceAppData: Mobile.IDeviceAppData, localToDevicePaths: Mobile.ILocalToDevicePathData[], isFullSync: boolean): Promise<void>;
 }
 
-interface IOptions extends ICommonOptions {
+interface IBundle {
+	bundle: boolean;
+}
+
+interface IPlatformTemplate {
+	platformTemplate: string;
+}
+
+interface IEmulator {
+	emulator: boolean;
+}
+
+interface IClean {
+	clean: boolean;
+}
+
+interface IProvision {
+	provision: any;
+}
+
+interface ITeamIdentifier {
+	teamId: string;
+}
+
+interface IAndroidReleaseOptions {
+	keyStoreAlias?: string;
+	keyStoreAliasPassword?: string;
+	keyStorePassword?: string;
+	keyStorePath?: string;
+}
+
+interface IOptions extends ICommonOptions, IBundle, IPlatformTemplate, IEmulator, IClean, IProvision, ITeamIdentifier, IAndroidReleaseOptions {
 	all: boolean;
 	baseConfig: string;
 	client: boolean;
 	compileSdk: number;
 	copyTo: string;
 	debugTransport: boolean;
-	emulator: boolean;
 	forDevice: boolean;
 	framework: string;
 	frameworkName: string;
@@ -76,24 +106,37 @@ interface IOptions extends ICommonOptions {
 	ignoreScripts: boolean; //npm flag
 	disableNpmInstall: boolean;
 	ipa: string;
-	keyStoreAlias: string;
-	keyStoreAliasPassword: string;
-	keyStorePassword: string;
-	keyStorePath: string;
-	ng: boolean;
 	tsc: boolean;
+	ng: boolean;
 	androidTypings: boolean;
-	bundle: boolean;
-	platformTemplate: string;
 	port: Number;
 	production: boolean; //npm flag
 	sdk: string;
-	teamId: string;
 	syncAllFiles: boolean;
 	liveEdit: boolean;
 	chrome: boolean;
-	clean: boolean;
-	provision: any;
+}
+
+interface IAndroidBuildOptionsSettings extends IAndroidReleaseOptions, IRelease { }
+
+interface IAppFilesUpdaterOptions extends IBundle, IRelease { }
+
+interface IDeviceEmulator extends IEmulator, IDeviceIdentifier { }
+
+interface IRunPlatformOptions extends IJustLaunch, IDeviceEmulator { }
+
+interface IDeployPlatformOptions extends IPlatformTemplate, IRelease, IClean, IDeviceEmulator {
+	projectDir: string;
+	forceInstall?: boolean;
+}
+
+interface IEmulatePlatformOptions extends IJustLaunch, IDeployPlatformOptions, IAvailableDevices, IAvd {
+}
+
+interface IUpdatePlatformOptions extends IPlatformTemplate {
+	currentVersion: string;
+	newVersion: string;
+	canUpdate: boolean;
 }
 
 interface IInitService {

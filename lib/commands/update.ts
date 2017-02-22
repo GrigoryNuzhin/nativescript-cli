@@ -4,7 +4,8 @@ import * as shelljs from "shelljs";
 export class UpdateCommand implements ICommand {
 	public allowedParameters: ICommandParameter[] = [];
 
-	constructor(private $projectData: IProjectData,
+	constructor(private $options: IOptions,
+		private $projectData: IProjectData,
 		private $platformService: IPlatformService,
 		private $platformsData: IPlatformsData,
 		private $pluginsService: IPluginsService,
@@ -81,12 +82,12 @@ export class UpdateCommand implements ICommand {
 		platforms = platforms.concat(packagePlatforms);
 		if (args.length === 1) {
 			for (let platform of platforms) {
-				await this.$platformService.addPlatforms([platform + "@" + args[0]]);
+				await this.$platformService.addPlatforms([platform + "@" + args[0]], this.$options.platformTemplate);
 			}
 
 			await this.$pluginsService.add("tns-core-modules@" + args[0]);
 		} else {
-			await this.$platformService.addPlatforms(platforms);
+			await this.$platformService.addPlatforms(platforms, this.$options.platformTemplate);
 			await this.$pluginsService.add("tns-core-modules");
 		}
 

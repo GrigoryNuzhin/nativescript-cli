@@ -143,8 +143,13 @@ class IOSDebugService implements IDebugService {
 				return await this.emulatorDebugBrk(shouldBreak);
 			}
 
+			const runOptions: IRunPlatformOptions = {
+				device: this.$options.device,
+				emulator: this.$options.emulator,
+				justlaunch: this.$options.justlaunch
+			};
 			// we intentionally do not wait on this here, because if we did, we'd miss the AppLaunching notification
-			let action = this.$platformService.runPlatform(this.platform);
+			let action = this.$platformService.runPlatform(this.platform, runOptions);
 
 			await this.debugBrkCore(device, shouldBreak);
 

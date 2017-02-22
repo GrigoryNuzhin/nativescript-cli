@@ -122,7 +122,8 @@ export abstract class PlatformLiveSyncServiceBase implements IPlatformLiveSyncSe
 						for (let platform in this.batch) {
 							let batch = this.batch[platform];
 							await batch.syncFiles(async (filesToSync: string[]) => {
-								await this.$platformService.preparePlatform(this.liveSyncData.platform);
+								const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+								await this.$platformService.preparePlatform(this.liveSyncData.platform, appFilesUpdaterOptions, this.$options.platformTemplate);
 								let canExecute = this.getCanExecuteAction(this.liveSyncData.platform, this.liveSyncData.appIdentifier);
 								let deviceFileAction = (deviceAppData: Mobile.IDeviceAppData, localToDevicePaths: Mobile.ILocalToDevicePathData[]) => this.transferFiles(deviceAppData, localToDevicePaths, this.liveSyncData.projectFilesPath, !filePath);
 								let action = this.getSyncAction(filesToSync, deviceFileAction, afterFileSyncAction);
@@ -163,13 +164,17 @@ export abstract class PlatformLiveSyncServiceBase implements IPlatformLiveSyncSe
 			let isFullSync = false;
 
 			if (this.$options.clean || this.$projectChangesService.currentChanges.changesRequireBuild) {
-				let buildConfig: IBuildConfig = { buildForDevice: !device.isEmulator };
+				let buildConfig: IBuildConfig = {
+					buildForDevice: !device.isEmulator,
+					projectDir: this.$options.path,
+					release: this.$options.release
+				};
 				let platform = device.deviceInfo.platform;
 				if (this.$platformService.shouldBuild(platform, buildConfig)) {
 					await this.$platformService.buildPlatform(platform, buildConfig);
 				}
 
-				await this.$platformService.installApplication(device);
+				await this.$platformService.installApplication(device, this.$options.release);
 				deviceAppData = this.$deviceAppDataFactory.create(this.liveSyncData.appIdentifier, this.$mobileHelper.normalizePlatformName(this.liveSyncData.platform), device);
 				isFullSync = true;
 			} else {

@@ -1,11 +1,12 @@
 export class UpdatePlatformCommand implements ICommand {
 	public allowedParameters: ICommandParameter[] = [];
 
-	constructor(private $platformService: IPlatformService,
+	constructor(private $options: IOptions,
+		private $platformService: IPlatformService,
 		private $errors: IErrors) { }
 
 	public async execute(args: string[]): Promise<void> {
-		await this.$platformService.updatePlatforms(args);
+		await this.$platformService.updatePlatforms(args, this.$options.platformTemplate);
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {

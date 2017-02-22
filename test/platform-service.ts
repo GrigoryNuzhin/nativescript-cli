@@ -97,20 +97,20 @@ describe('Platform Service Tests', () => {
 				let fs = testInjector.resolve("fs");
 				fs.exists = () => false;
 
-				await platformService.addPlatforms(["Android"]);
-				await platformService.addPlatforms(["ANDROID"]);
-				await platformService.addPlatforms(["AnDrOiD"]);
-				await platformService.addPlatforms(["androiD"]);
+				await platformService.addPlatforms(["Android"], "");
+				await platformService.addPlatforms(["ANDROID"], "");
+				await platformService.addPlatforms(["AnDrOiD"], "");
+				await platformService.addPlatforms(["androiD"], "");
 
-				await platformService.addPlatforms(["iOS"]);
-				await platformService.addPlatforms(["IOS"]);
-				await platformService.addPlatforms(["IoS"]);
-				await platformService.addPlatforms(["iOs"]);
+				await platformService.addPlatforms(["iOS"], "");
+				await platformService.addPlatforms(["IOS"], "");
+				await platformService.addPlatforms(["IoS"], "");
+				await platformService.addPlatforms(["iOs"], "");
 			});
 			it("should fail if platform is already installed", async () => {
 				// By default fs.exists returns true, so the platforms directory should exists
-				await assert.isRejected(platformService.addPlatforms(["android"]));
-				await assert.isRejected(platformService.addPlatforms(["ios"]));
+				await assert.isRejected(platformService.addPlatforms(["android"], ""));
+				await assert.isRejected(platformService.addPlatforms(["ios"], ""));
 			});
 			it("should fail if npm is unavalible", async () => {
 				let fs = testInjector.resolve("fs");
@@ -121,7 +121,7 @@ describe('Platform Service Tests', () => {
 				npmInstallationManager.install = () => { throw new Error(errorMessage); };
 
 				try {
-					await platformService.addPlatforms(["android"]);
+					await platformService.addPlatforms(["android"], "");
 				} catch (err) {
 					assert.equal(errorMessage, err.message);
 				}
@@ -140,7 +140,7 @@ describe('Platform Service Tests', () => {
 				};
 
 				try {
-					await platformService.addPlatforms(["ios"]);
+					await platformService.addPlatforms(["ios"], "");
 				} catch (err) {
 					assert.equal(errorMessage, err.message);
 				}
@@ -159,7 +159,7 @@ describe('Platform Service Tests', () => {
 				};
 
 				try {
-					await platformService.addPlatforms(["android"]);
+					await platformService.addPlatforms(["android"], "");
 				} catch (err) {
 					assert.equal(errorMessage, err.message);
 				}
@@ -175,7 +175,7 @@ describe('Platform Service Tests', () => {
 		});
 		it("shouldn't fail when platforms are added", async () => {
 			testInjector.resolve("fs").exists = () => false;
-			await platformService.addPlatforms(["android"]);
+			await platformService.addPlatforms(["android"], "");
 
 			testInjector.resolve("fs").exists = () => true;
 			platformService.removePlatforms(["android"]);
@@ -195,7 +195,7 @@ describe('Platform Service Tests', () => {
 				let npmInstallationManager: INpmInstallationManager = testInjector.resolve("npmInstallationManager");
 				npmInstallationManager.getLatestVersion = async () => "0.2.0";
 
-				await assert.isRejected(platformService.updatePlatforms(["android"]));
+				await assert.isRejected(platformService.updatePlatforms(["android"], ""));
 			});
 		});
 	});
@@ -271,9 +271,8 @@ describe('Platform Service Tests', () => {
 			projectData.projectDir = testDirData.tempFolder;
 
 			platformService = testInjector.resolve("platformService");
-			let options: IOptions = testInjector.resolve("options");
-			options.release = release;
-			await platformService.preparePlatform(platformToTest);
+			const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: false, release: release };
+			await platformService.preparePlatform(platformToTest, appFilesUpdaterOptions, "");
 
 			let test1FileName = platformToTest.toLowerCase() === "ios" ? "test1.js" : "test2.js";
 			let test2FileName = platformToTest.toLowerCase() === "ios" ? "test2.js" : "test1.js";
@@ -349,7 +348,8 @@ describe('Platform Service Tests', () => {
 			let warnings: string = "";
 			try {
 				testInjector.resolve("$logger").warn = (text: string) => warnings += text;
-				await platformService.preparePlatform("android");
+				const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: false, release: false };
+				await platformService.preparePlatform("android", appFilesUpdaterOptions, "");
 			} finally {
 				testInjector.resolve("$logger").warn = oldLoggerWarner;
 			}

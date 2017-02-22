@@ -2,6 +2,7 @@ import * as path from "path";
 import * as shell from "shelljs";
 import * as constants from "../constants";
 import * as helpers from "../common/helpers";
+import { exportedPromise } from "../common/decorators";
 import * as semver from "semver";
 import { AppFilesUpdater } from "./app-files-updater";
 import * as temp from "temp";
@@ -28,7 +29,6 @@ export class PlatformService implements IPlatformService {
 		private $projectData: IProjectData,
 		private $projectDataService: IProjectDataService,
 		private $hooksService: IHooksService,
-		private $options: IOptions,
 		private $nodeModulesBuilder: INodeModulesBuilder,
 		private $pluginsService: IPluginsService,
 		private $projectFilesManager: IProjectFilesManager,
@@ -43,16 +43,16 @@ export class PlatformService implements IPlatformService {
 		private $emulatorPlatformService: IEmulatorPlatformService,
 		private $analyticsService: IAnalyticsService) { }
 
-	public async addPlatforms(platforms: string[]): Promise<void> {
+	public async addPlatforms(platforms: string[], platformTemplate: string): Promise<void> {
 		let platformsDir = this.$projectData.platformsDir;
 		this.$fs.ensureDirectoryExists(platformsDir);
 
 		for (let platform of platforms) {
-			await this.addPlatform(platform.toLowerCase());
+			await this.addPlatform(platform.toLowerCase(), platformTemplate);
 		}
 	}
 
-	private async addPlatform(platformParam: string): Promise<void> {
+	private async addPlatform(platformParam: string, platformTemplate: string, frameworkPath?: string): Promise<void> {
 		let data = platformParam.split("@"),
 			platform = data[0].toLowerCase(),
 			version = data[1];
@@ -85,7 +85,7 @@ export class PlatformService implements IPlatformService {
 			dependencyType: "save"
 		};
 
-		if (!this.$options.frameworkPath) {
+		if (!frameworkPath) {
 			packageToInstall = platformData.frameworkPackageName;
 			npmOptions["version"] = version;
 		}
@@ -98,7 +98,7 @@ export class PlatformService implements IPlatformService {
 			let frameworkDir = path.join(downloadedPackagePath, constants.PROJECT_FRAMEWORK_FOLDER_NAME);
 			frameworkDir = path.resolve(frameworkDir);
 
-			let coreModuleName = await this.addPlatformCore(platformData, frameworkDir);
+			let coreModuleName = await this.addPlatformCore(platformData, frameworkDir, platformTemplate);
 			await this.$npm.uninstall(coreModuleName, { save: true }, this.$projectData.projectDir);
 		} catch (err) {
 			this.$fs.deleteDirectory(platformPath);
@@ -111,20 +111,18 @@ export class PlatformService implements IPlatformService {
 
 	}
 
-	private async addPlatformCore(platformData: IPlatformData, frameworkDir: string): Promise<string> {
+	private async addPlatformCore(platformData: IPlatformData, frameworkDir: string, platformTemplate: string): Promise<string> {
 		let coreModuleData = this.$fs.readJson(path.join(frameworkDir, "../", "package.json"));
 		let installedVersion = coreModuleData.version;
 		let coreModuleName = coreModuleData.name;
 
 		this.$projectDataService.initialize(this.$projectData.projectDir);
-		let customTemplateOptions = await this.getPathToPlatformTemplate(this.$options.platformTemplate, platformData.frameworkPackageName);
+		let customTemplateOptions = await this.getPathToPlatformTemplate(platformTemplate, platformData.frameworkPackageName);
 		let pathToTemplate = customTemplateOptions && customTemplateOptions.pathToTemplate;
 		await platformData.platformProjectService.createProject(path.resolve(frameworkDir), installedVersion, pathToTemplate);
 		platformData.platformProjectService.ensureConfigurationFileInAppResources();
 		await platformData.platformProjectService.interpolateData();
 		platformData.platformProjectService.afterCreateProject(platformData.projectRoot);
-
-		this.applyBaseConfigOption(platformData);
 
 		let frameworkPackageNameData: any = { version: installedVersion };
 		if (customTemplateOptions) {
@@ -187,7 +185,8 @@ export class PlatformService implements IPlatformService {
 		return _.filter(this.$platformsData.platformsNames, p => { return this.isPlatformPrepared(p); });
 	}
 
-	public async preparePlatform(platform: string): Promise<boolean> {
+	@exportedPromise("platformService")
+	public async preparePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<boolean> {
 		this.validatePlatform(platform);
 
 		await this.trackProjectType();
@@ -210,13 +209,13 @@ export class PlatformService implements IPlatformService {
 			}
 		}
 
-		await this.ensurePlatformInstalled(platform);
+		await this.ensurePlatformInstalled(platform, platformTemplate);
 		let changesInfo = this.$projectChangesService.checkForChanges(platform);
 
 		this.$logger.trace("Changes info in prepare platform:", changesInfo);
 
 		if (changesInfo.hasChanges) {
-			await this.preparePlatformCore(platform, changesInfo);
+			await this.preparePlatformCore(platform, appFilesUpdaterOptions, changesInfo);
 			this.$projectChangesService.savePrepareInfo(platform);
 		} else {
 			this.$logger.out("Skipping prepare.");
@@ -225,18 +224,18 @@ export class PlatformService implements IPlatformService {
 		return true;
 	}
 
-	public async validateOptions(platform?: string): Promise<boolean> {
+	public async validateOptions(provision: any, platform?: string): Promise<boolean> {
 		if (platform) {
 			platform = this.$mobileHelper.normalizePlatformName(platform);
 			this.$logger.trace("Validate options for platform: " + platform);
 			let platformData = this.$platformsData.getPlatformData(platform);
-			return await platformData.platformProjectService.validateOptions();
+			return await platformData.platformProjectService.validateOptions(provision);
 		} else {
 			let valid = true;
 			for (let availablePlatform in this.$platformsData.availablePlatforms) {
 				this.$logger.trace("Validate options for platform: " + availablePlatform);
 				let platformData = this.$platformsData.getPlatformData(availablePlatform);
-				valid = valid && await platformData.platformProjectService.validateOptions();
+				valid = valid && await platformData.platformProjectService.validateOptions(provision);
 			}
 
 			return valid;
@@ -244,13 +243,13 @@ export class PlatformService implements IPlatformService {
 	}
 
 	@helpers.hook('prepare')
-	private async preparePlatformCore(platform: string, changesInfo?: IProjectChangesInfo): Promise<void> {
+	private async preparePlatformCore(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, changesInfo?: IProjectChangesInfo): Promise<void> {
 		this.$logger.out("Preparing project...");
 
 		let platformData = this.$platformsData.getPlatformData(platform);
 
 		if (!changesInfo || changesInfo.appFilesChanged) {
-			await this.copyAppFiles(platform);
+			await this.copyAppFiles(platform, appFilesUpdaterOptions);
 		}
 		if (!changesInfo || changesInfo.appResourcesChanged) {
 			this.copyAppResources(platform);
@@ -269,8 +268,7 @@ export class PlatformService implements IPlatformService {
 		this.$projectFilesManager.processPlatformSpecificFiles(directoryPath, platform, excludedDirs);
 
 		if (!changesInfo || changesInfo.configChanged || changesInfo.modulesChanged) {
-			this.applyBaseConfigOption(platformData);
-			await platformData.platformProjectService.processConfigurationFilesFromAppResources();
+			await platformData.platformProjectService.processConfigurationFilesFromAppResources(appFilesUpdaterOptions.release);
 		}
 
 		await platformData.platformProjectService.interpolateConfigurationFile();
@@ -278,7 +276,7 @@ export class PlatformService implements IPlatformService {
 		this.$logger.out("Project successfully prepared (" + platform + ")");
 	}
 
-	private async copyAppFiles(platform: string): Promise<void> {
+	private async copyAppFiles(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions): Promise<void> {
 		let platformData = this.$platformsData.getPlatformData(platform);
 		platformData.platformProjectService.ensureConfigurationFileInAppResources();
 		let appDestinationDirectoryPath = path.join(platformData.appDestinationDirectoryPath, constants.APP_FOLDER_NAME);
@@ -287,7 +285,7 @@ export class PlatformService implements IPlatformService {
 		this.$fs.ensureDirectoryExists(appDestinationDirectoryPath);
 		let appSourceDirectoryPath = path.join(this.$projectData.projectDir, constants.APP_FOLDER_NAME);
 
-		const appUpdater = new AppFilesUpdater(appSourceDirectoryPath, appDestinationDirectoryPath, this.$options, this.$fs);
+		const appUpdater = new AppFilesUpdater(appSourceDirectoryPath, appDestinationDirectoryPath, appFilesUpdaterOptions, this.$fs);
 		appUpdater.updateApp(sourceFiles => {
 			this.$xmlValidator.validateXmlFiles(sourceFiles);
 		});
@@ -322,7 +320,7 @@ export class PlatformService implements IPlatformService {
 		}
 	}
 
-	public async shouldBuild(platform: string, buildConfig?: IBuildConfig): Promise<boolean> {
+	public async shouldBuild(platform: string, buildConfig: IBuildConfig): Promise<boolean> {
 		if (this.$projectChangesService.currentChanges.changesRequireBuild) {
 			return true;
 		}
@@ -338,11 +336,11 @@ export class PlatformService implements IPlatformService {
 			return true;
 		}
 		let prepareInfo = this.$projectChangesService.getPrepareInfo(platform);
-		let buildInfo = this.getBuildInfo(platform, platformData, buildConfig);
+		let buildInfo = this.getBuildInfo(platform, platformData, buildConfig.buildForDevice);
 		if (!prepareInfo || !buildInfo) {
 			return true;
 		}
-		if (this.$options.clean) {
+		if (buildConfig.clean) {
 			return prepareInfo.time !== buildInfo.prepareTime;
 		}
 		if (prepareInfo.time === buildInfo.prepareTime) {
@@ -361,7 +359,8 @@ export class PlatformService implements IPlatformService {
 		}
 	}
 
-	public async buildPlatform(platform: string, buildConfig?: IBuildConfig): Promise<void> {
+	@exportedPromise("platformService")
+	public async buildPlatform(platform: string, buildConfig: IBuildConfig): Promise<void> {
 		this.$logger.out("Building project...");
 
 		await this.trackProjectType();
@@ -369,7 +368,7 @@ export class PlatformService implements IPlatformService {
 		let platformData = this.$platformsData.getPlatformData(platform);
 		await platformData.platformProjectService.buildProject(platformData.projectRoot, buildConfig);
 		let prepareInfo = this.$projectChangesService.getPrepareInfo(platform);
-		let buildInfoFilePath = this.getBuildOutputPath(platform, platformData, buildConfig);
+		let buildInfoFilePath = this.getBuildOutputPath(platform, platformData, buildConfig.buildForDevice);
 		let buildInfoFile = path.join(buildInfoFilePath, buildInfoFileName);
 		let buildInfo: IBuildInfo = {
 			prepareTime: prepareInfo.changesRequireBuildTime,
@@ -386,11 +385,11 @@ export class PlatformService implements IPlatformService {
 			return true;
 		}
 		let deviceBuildInfo: IBuildInfo = await this.getDeviceBuildInfo(device);
-		let localBuildInfo = this.getBuildInfo(platform, platformData, { buildForDevice: !device.isEmulator });
+		let localBuildInfo = this.getBuildInfo(platform, platformData, !device.isEmulator);
 		return !localBuildInfo || !deviceBuildInfo || deviceBuildInfo.buildTime !== localBuildInfo.buildTime;
 	}
 
-	public async installApplication(device: Mobile.IDevice): Promise<void> {
+	public async installApplication(device: Mobile.IDevice, release: boolean): Promise<void> {
 		this.$logger.out("Installing...");
 		let platformData = this.$platformsData.getPlatformData(device.deviceInfo.platform);
 		let packageFile = "";
@@ -404,9 +403,9 @@ export class PlatformService implements IPlatformService {
 
 		await device.applicationManager.reinstallApplication(this.$projectData.projectId, packageFile);
 
-		if (!this.$options.release) {
+		if (!release) {
 			let deviceFilePath = await this.getDeviceBuildInfoFilePath(device);
-			let buildInfoFilePath = this.getBuildOutputPath(device.deviceInfo.platform, platformData, { buildForDevice: !device.isEmulator });
+			let buildInfoFilePath = this.getBuildOutputPath(device.deviceInfo.platform, platformData, !device.isEmulator);
 			let appIdentifier = this.$projectData.projectId;
 
 			await device.fileSystem.putFile(path.join(buildInfoFilePath, buildInfoFileName), deviceFilePath, appIdentifier);
@@ -415,12 +414,16 @@ export class PlatformService implements IPlatformService {
 		this.$logger.out(`Successfully installed on device with identifier '${device.deviceInfo.identifier}'.`);
 	}
 
-	public async deployPlatform(platform: string, forceInstall?: boolean): Promise<void> {
-		await this.preparePlatform(platform);
+	public async deployPlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, deployOptions: IDeployPlatformOptions): Promise<void> {
+		await this.preparePlatform(platform, appFilesUpdaterOptions, deployOptions.platformTemplate);
 		this.$logger.out("Searching for devices...");
-		await this.$devicesService.initialize({ platform: platform, deviceId: this.$options.device });
+		await this.$devicesService.initialize({ platform: platform, deviceId: deployOptions.device });
 		let action = async (device: Mobile.IDevice): Promise<void> => {
-			let buildConfig: IBuildConfig = { buildForDevice: !this.$devicesService.isiOSSimulator(device) };
+			let buildConfig: IBuildConfig = {
+				buildForDevice: !this.$devicesService.isiOSSimulator(device),
+				projectDir: deployOptions.projectDir,
+				release: deployOptions.release
+			};
 			let shouldBuild = await this.shouldBuild(platform, buildConfig);
 			if (shouldBuild) {
 				await this.buildPlatform(platform, buildConfig);
@@ -428,22 +431,18 @@ export class PlatformService implements IPlatformService {
 				this.$logger.out("Skipping package build. No changes detected on the native side. This will be fast!");
 			}
 
-			if (forceInstall || shouldBuild || (await this.shouldInstall(device))) {
-				await this.installApplication(device);
+			if (deployOptions.forceInstall || shouldBuild || (await this.shouldInstall(device))) {
+				await this.installApplication(device, deployOptions.release);
 			} else {
 				this.$logger.out("Skipping install.");
 			}
 		};
 
-		await this.$devicesService.execute(action, this.getCanExecuteAction(platform));
+		await this.$devicesService.execute(action, this.getCanExecuteAction(platform, deployOptions));
 	}
 
-	public async runPlatform(platform: string): Promise<void> {
+	public async runPlatform(platform: string, runOptions: IRunPlatformOptions): Promise<void> {
 		await this.trackProjectType();
-
-		if (this.$options.justlaunch) {
-			this.$options.watch = false;
-		}
 
 		this.$logger.out("Starting...");
 
@@ -452,51 +451,50 @@ export class PlatformService implements IPlatformService {
 			this.$logger.out(`Successfully started on device with identifier '${device.deviceInfo.identifier}'.`);
 		};
 
-		await this.$devicesService.initialize({ platform: platform, deviceId: this.$options.device });
-		await this.$devicesService.execute(action, this.getCanExecuteAction(platform));
+		await this.$devicesService.initialize({ platform: platform, deviceId: runOptions.device });
+		await this.$devicesService.execute(action, this.getCanExecuteAction(platform, runOptions));
 	}
 
-	public async emulatePlatform(platform: string): Promise<void> {
-		if (this.$options.avd) {
+	public async emulatePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, emulateOptions: IEmulatePlatformOptions): Promise<void> {
+		if (emulateOptions.avd) {
 			this.$logger.warn(`Option --avd is no longer supported. Please use --device instead!`);
 			return Promise.resolve();
 		}
 
-		if (this.$options.availableDevices) {
+		if (emulateOptions.availableDevices) {
 			return this.$emulatorPlatformService.listAvailableEmulators(platform);
 		}
 
-		this.$options.emulator = true;
-		if (this.$options.device) {
-			let info = await this.$emulatorPlatformService.getEmulatorInfo(platform, this.$options.device);
+		if (emulateOptions.device) {
+			let info = await this.$emulatorPlatformService.getEmulatorInfo(platform, emulateOptions.device);
 			if (info) {
 				if (!info.isRunning) {
 					await this.$emulatorPlatformService.startEmulator(info);
 				}
 
-				this.$options.device = null;
+				emulateOptions.device = null;
 			} else {
-				await this.$devicesService.initialize({ platform: platform, deviceId: this.$options.device });
+				await this.$devicesService.initialize({ platform: platform, deviceId: emulateOptions.device });
 				let found: Mobile.IDeviceInfo[] = [];
 				if (this.$devicesService.hasDevices) {
-					found = this.$devicesService.getDevices().filter((device: Mobile.IDeviceInfo) => device.identifier === this.$options.device);
+					found = this.$devicesService.getDevices().filter((deviceInfo: Mobile.IDeviceInfo) => deviceInfo.identifier === emulateOptions.device);
 				}
 
 				if (found.length === 0) {
-					this.$errors.fail("Cannot find device with name: %s", this.$options.device);
+					this.$errors.fail("Cannot find device with name: %s", emulateOptions.device);
 				}
 			}
 		}
 
-		await this.deployPlatform(platform);
-		return this.runPlatform(platform);
+		await this.deployPlatform(platform, appFilesUpdaterOptions, emulateOptions);
+		return this.runPlatform(platform, emulateOptions);
 	}
 
-	private getBuildOutputPath(platform: string, platformData: IPlatformData, buildConfig?: IBuildConfig): string {
-		let buildForDevice = buildConfig ? buildConfig.buildForDevice : this.$options.forDevice;
+	private getBuildOutputPath(platform: string, platformData: IPlatformData, buildForDevice: boolean): string {
 		if (platform.toLowerCase() === this.$devicePlatformsConstants.iOS.toLowerCase()) {
 			return buildForDevice ? platformData.deviceBuildOutputPath : platformData.emulatorBuildOutputPath;
 		}
+
 		return platformData.deviceBuildOutputPath;
 	}
 
@@ -515,8 +513,8 @@ export class PlatformService implements IPlatformService {
 		}
 	}
 
-	private getBuildInfo(platform: string, platformData: IPlatformData, buildConfig: IBuildConfig): IBuildInfo {
-		let buildInfoFilePath = this.getBuildOutputPath(platform, platformData, buildConfig);
+	private getBuildInfo(platform: string, platformData: IPlatformData, buildForDevice: boolean): IBuildInfo {
+		let buildInfoFilePath = this.getBuildOutputPath(platform, platformData, buildForDevice);
 		let buildInfoFile = path.join(buildInfoFilePath, buildInfoFileName);
 		if (this.$fs.exists(buildInfoFile)) {
 			try {
@@ -530,13 +528,13 @@ export class PlatformService implements IPlatformService {
 		return null;
 	}
 
-	public async cleanDestinationApp(platform: string): Promise<void> {
-		await this.ensurePlatformInstalled(platform);
+	public async cleanDestinationApp(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<void> {
+		await this.ensurePlatformInstalled(platform, platformTemplate);
 
 		const appSourceDirectoryPath = path.join(this.$projectData.projectDir, constants.APP_FOLDER_NAME);
 		let platformData = this.$platformsData.getPlatformData(platform);
 		let appDestinationDirectoryPath = path.join(platformData.appDestinationDirectoryPath, constants.APP_FOLDER_NAME);
-		const appUpdater = new AppFilesUpdater(appSourceDirectoryPath, appDestinationDirectoryPath, this.$options, this.$fs);
+		const appUpdater = new AppFilesUpdater(appSourceDirectoryPath, appDestinationDirectoryPath, appFilesUpdaterOptions, this.$fs);
 		appUpdater.cleanDestinationApp();
 	}
 
@@ -586,23 +584,23 @@ export class PlatformService implements IPlatformService {
 		});
 	}
 
-	public async updatePlatforms(platforms: string[]): Promise<void> {
+	public async updatePlatforms(platforms: string[], platformTemplate: string): Promise<void> {
 		for (let platformParam of platforms) {
 			let data = platformParam.split("@"),
 				platform = data[0],
 				version = data[1];
 
 			if (this.isPlatformInstalled(platform)) {
-				await this.updatePlatform(platform, version);
+				await this.updatePlatform(platform, version, platformTemplate);
 			} else {
-				await this.addPlatform(platformParam);
+				await this.addPlatform(platformParam, platformTemplate);
 			}
 		};
 	}
 
-	private getCanExecuteAction(platform: string): any {
+	private getCanExecuteAction(platform: string, options: IDeviceEmulator): any {
 		let canExecute = (currentDevice: Mobile.IDevice): boolean => {
-			if (this.$options.device && currentDevice && currentDevice.deviceInfo) {
+			if (options.device && currentDevice && currentDevice.deviceInfo) {
 				let device = this.$devicesService.getDeviceByDeviceOption();
 				if (device && device.deviceInfo) {
 					return currentDevice.deviceInfo.identifier === device.deviceInfo.identifier;
@@ -610,7 +608,7 @@ export class PlatformService implements IPlatformService {
 			}
 
 			if (this.$mobileHelper.isiOSPlatform(platform) && this.$hostInfo.isDarwin) {
-				if (this.$devicesService.isOnlyiOSSimultorRunning() || this.$options.emulator || this.$devicesService.isiOSSimulator(currentDevice)) {
+				if (this.$devicesService.isOnlyiOSSimultorRunning() || options.emulator || this.$devicesService.isiOSSimulator(currentDevice)) {
 					return true;
 				}
 
@@ -647,9 +645,9 @@ export class PlatformService implements IPlatformService {
 		}
 	}
 
-	public async ensurePlatformInstalled(platform: string): Promise<void> {
+	public async ensurePlatformInstalled(platform: string, platformTemplate: string): Promise<void> {
 		if (!this.isPlatformInstalled(platform)) {
-			await this.addPlatform(platform);
+			await this.addPlatform(platform, platformTemplate);
 		}
 	}
 
@@ -709,7 +707,7 @@ export class PlatformService implements IPlatformService {
 		return this.getLatestApplicationPackage(platformData.emulatorBuildOutputPath || platformData.deviceBuildOutputPath, platformData.validPackageNamesForEmulator || platformData.validPackageNamesForDevice);
 	}
 
-	private async updatePlatform(platform: string, version: string): Promise<void> {
+	private async updatePlatform(platform: string, version: string, platformTemplate: string): Promise<void> {
 		let platformData = this.$platformsData.getPlatformData(platform);
 
 		this.$projectDataService.initialize(this.$projectData.projectDir);
@@ -731,7 +729,7 @@ export class PlatformService implements IPlatformService {
 			}
 
 			if (!semver.gt(currentVersion, newVersion)) {
-				await this.updatePlatformCore(platformData, currentVersion, newVersion, canUpdate);
+				await this.updatePlatformCore(platformData, { currentVersion, newVersion, canUpdate, platformTemplate });
 			} else if (semver.eq(currentVersion, newVersion)) {
 				this.$errors.fail("Current and new version are the same.");
 			} else {
@@ -743,20 +741,12 @@ export class PlatformService implements IPlatformService {
 
 	}
 
-	private async updatePlatformCore(platformData: IPlatformData, currentVersion: string, newVersion: string, canUpdate: boolean): Promise<void> {
+	private async updatePlatformCore(platformData: IPlatformData, updateOptions: IUpdatePlatformOptions): Promise<void> {
 		let packageName = platformData.normalizedPlatformName.toLowerCase();
 		this.removePlatforms([packageName]);
-		packageName = newVersion ? `${packageName}@${newVersion}` : packageName;
-		await this.addPlatform(packageName);
-		this.$logger.out("Successfully updated to version ", newVersion);
-	}
-
-	private applyBaseConfigOption(platformData: IPlatformData): void {
-		if (this.$options.baseConfig) {
-			let newConfigFile = path.resolve(this.$options.baseConfig);
-			this.$logger.trace(`Replacing '${platformData.configurationFilePath}' with '${newConfigFile}'.`);
-			this.$fs.copyFile(newConfigFile, platformData.configurationFilePath);
-		}
+		packageName = updateOptions.newVersion ? `${packageName}@${updateOptions.newVersion}` : packageName;
+		await this.addPlatform(packageName, updateOptions.platformTemplate);
+		this.$logger.out("Successfully updated to version ", updateOptions.newVersion);
 	}
 
 	public async readFile(device: Mobile.IDevice, deviceFilePath: string): Promise<string> {

@@ -4,7 +4,8 @@ export class InstallCommand implements ICommand {
 	public enableHooks = false;
 	public allowedParameters: ICommandParameter[] = [this.$stringParameter];
 
-	constructor(private $platformsData: IPlatformsData,
+	constructor(private $options: IOptions,
+		private $platformsData: IPlatformsData,
 		private $platformService: IPlatformService,
 		private $projectData: IProjectData,
 		private $projectDataService: IProjectDataService,
@@ -29,7 +30,7 @@ export class InstallCommand implements ICommand {
 			let frameworkPackageData = this.$projectDataService.getValue(platformData.frameworkPackageName);
 			if (frameworkPackageData && frameworkPackageData.version) {
 				try {
-					await this.$platformService.addPlatforms([`${platform}@${frameworkPackageData.version}`]);
+					await this.$platformService.addPlatforms([`${platform}@${frameworkPackageData.version}`], this.$options.platformTemplate);
 				} catch (err) {
 					error = `${error}${EOL}${err}`;
 				}

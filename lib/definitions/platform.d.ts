@@ -1,5 +1,5 @@
 interface IPlatformService {
-	addPlatforms(platforms: string[]): Promise<void>;
+	addPlatforms(platforms: string[], platformTemplate: string): Promise<void>;
 
 	/**
 	 * Gets list of all installed platforms (the ones for which <project dir>/platforms/<platform> exists).
@@ -26,7 +26,7 @@ interface IPlatformService {
 	 */
 	removePlatforms(platforms: string[]): void;
 
-	updatePlatforms(platforms: string[]): Promise<void>;
+	updatePlatforms(platforms: string[], platformTemplate: string): Promise<void>;
 
 	/**
 	 * Ensures that the specified platform and its dependencies are installed.
@@ -34,9 +34,11 @@ interface IPlatformService {
 	 * When finishes, prepare saves the .nsprepareinfo file in platform folder.
 	 * This file contains information about current project configuration and allows skipping unnecessary build, deploy and livesync steps.
 	 * @param {string} platform The platform to be prepared.
+	 * @param {IAppFilesUpdaterOptions} appFilesUpdaterOptions Options needed to instantiate AppFilesUpdater class.
+	 * @param {string} platformTemplate The name of the platform template.
 	 * @returns {boolean} true indicates that the platform was prepared.
 	 */
-	preparePlatform(platform: string, changesInfo?: IProjectChangesInfo): Promise<boolean>;
+	preparePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<boolean>;
 
 	/**
 	 * Determines whether a build is necessary. A build is necessary when one of the following is true:
@@ -56,7 +58,7 @@ interface IPlatformService {
 	 * @param {IBuildConfig} buildConfig Indicates whether the build is for device or emulator.
 	 * @returns {void}
 	 */
-	buildPlatform(platform: string, buildConfig?: IBuildConfig): Promise<void>;
+	buildPlatform(platform: string, buildConfig: IBuildConfig): Promise<void>;
 
 	/**
 	 * Determines whether installation is necessary. It is necessary when one of the following is true:
@@ -72,9 +74,10 @@ interface IPlatformService {
 	 * When finishes, saves .nsbuildinfo in application root folder to indicate the prepare that was used to build the app.
 	 * * .nsbuildinfo is not persisted when building for release.
 	 * @param {Mobile.IDevice} device The device where the application should be installed.
+	 * @param {boolean} release Whether the application was built in release configuration.
 	 * @returns {void}
 	 */
-	installApplication(device: Mobile.IDevice): Promise<void>;
+	installApplication(device: Mobile.IDevice, release: boolean): Promise<void>;
 
 	/**
 	 * Gets first chance to validate the options provided as command line arguments.
@@ -87,26 +90,30 @@ interface IPlatformService {
 	 * Executes prepare, build and installOnPlatform when necessary to ensure that the latest version of the app is installed on specified platform.
 	 * - When --clean option is specified it builds the app on every change. If not, build is executed only when there are native changes.
 	 * @param {string} platform The platform to deploy.
-	 * @param {boolean} forceInstall When true, installs the application unconditionally.
+	 * @param {IAppFilesUpdaterOptions} appFilesUpdaterOptions Options needed to instantiate AppFilesUpdater class.
+	 * @param {IDeployPlatformOptions} deployOptions Various options that can manage the deploy operation.
 	 * @returns {void}
 	 */
-	deployPlatform(platform: string, forceInstall?: boolean): Promise<void>;
+	deployPlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, deployOptions: IDeployPlatformOptions): Promise<void>;
 
 	/**
 	 * Runs the application on specified platform. Assumes that the application is already build and installed. Fails if this is not true.
 	 * @param {string} platform The platform where to start the application.
+	 * @param {IRunPlatformOptions} runOptions Various options that help manage the run operation.
 	 * @returns {void}
 	 */
-	runPlatform(platform: string): Promise<void>;
+	runPlatform(platform: string, runOptions: IRunPlatformOptions): Promise<void>;
 
 	/**
 	 * The emulate command. In addition to `run --emulator` command, it handles the `--available-devices` option to show the available devices.
 	 * @param {string} platform The platform to emulate.
+	 * @param {IAppFilesUpdaterOptions} appFilesUpdaterOptions Options needed to instantiate AppFilesUpdater class.
+	 * @param {IEmulatePlatformOptions} emulateOptions Various options that can manage the emulate operation.
 	 * @returns {void}
 	 */
-	emulatePlatform(platform: string): Promise<void>;
+	emulatePlatform(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, emulateOptions: IEmulatePlatformOptions): Promise<void>;
 
-	cleanDestinationApp(platform: string): Promise<void>;
+	cleanDestinationApp(platform: string, appFilesUpdaterOptions: IAppFilesUpdaterOptions, platformTemplate: string): Promise<void>;
 	validatePlatformInstalled(platform: string): void;
 	validatePlatform(platform: string): void;
 

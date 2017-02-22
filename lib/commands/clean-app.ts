@@ -4,7 +4,8 @@ export class CleanAppCommandBase {
 
 	public async execute(args: string[]): Promise<void> {
 		let platform = args[0].toLowerCase();
-		return this.$platformService.cleanDestinationApp(platform);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		return this.$platformService.cleanDestinationApp(platform, appFilesUpdaterOptions, this.$options.platformTemplate);
 	}
 }
 

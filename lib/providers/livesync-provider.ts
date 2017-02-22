@@ -33,7 +33,11 @@ export class LiveSyncProvider implements ILiveSyncProvider {
 	}
 
 	public async buildForDevice(device: Mobile.IDevice): Promise<string> {
-		this.$platformService.buildPlatform(device.deviceInfo.platform, { buildForDevice: ! await device.isEmulator });
+		await this.$platformService.buildPlatform(device.deviceInfo.platform, {
+			buildForDevice: !device.isEmulator,
+			projectDir: this.$options.path,
+			release: this.$options.release
+		});
 		let platformData = this.$platformsData.getPlatformData(device.deviceInfo.platform);
 		if (device.isEmulator) {
 			return this.$platformService.getLatestApplicationPackageForEmulator(platformData).packageName;
@@ -43,7 +47,8 @@ export class LiveSyncProvider implements ILiveSyncProvider {
 	}
 
 	public async preparePlatformForSync(platform: string): Promise<void> {
-		await this.$platformService.preparePlatform(platform);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		await this.$platformService.preparePlatform(platform, appFilesUpdaterOptions, this.$options.platformTemplate);
 	}
 
 	public canExecuteFastSync(filePath: string, platform: string): boolean {

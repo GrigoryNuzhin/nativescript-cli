@@ -17,7 +17,16 @@
 			return this.debugService.debug();
 		}
 
-		await this.$platformService.deployPlatform(this.$devicesService.platform);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		const deployOptions: IDeployPlatformOptions = {
+			clean: this.$options.clean,
+			device: this.$options.device,
+			emulator: this.$options.emulator,
+			platformTemplate: this.$options.platformTemplate,
+			projectDir: this.$options.path,
+			release: this.$options.release
+		};
+		await this.$platformService.deployPlatform(this.$devicesService.platform, appFilesUpdaterOptions, deployOptions);
 		this.$config.debugLivesync = true;
 		let applicationReloadAction = async (deviceAppData: Mobile.IDeviceAppData): Promise<void> => {
 			let projectData: IProjectData = this.$injector.resolve("projectData");

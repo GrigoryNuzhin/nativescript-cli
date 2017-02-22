@@ -27,7 +27,6 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 		$fs: IFileSystem,
 		private $hostInfo: IHostInfo,
 		private $logger: ILogger,
-		private $options: IOptions,
 		$projectData: IProjectData,
 		$projectDataService: IProjectDataService,
 		private $sysInfo: ISysInfo,
@@ -200,10 +199,10 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 		}
 	}
 
-	public async interpolateConfigurationFile(): Promise<void> {
+	public async interpolateConfigurationFile(sdk?: string): Promise<void> {
 		let manifestPath = this.platformData.configurationFilePath;
 		shell.sed('-i', /__PACKAGE__/, this.$projectData.projectId, manifestPath);
-		shell.sed('-i', /__APILEVEL__/, this.$options.sdk || (await this.$androidToolsInfo.getToolsInfo()).compileSdkVersion.toString(), manifestPath);
+		shell.sed('-i', /__APILEVEL__/, sdk || (await this.$androidToolsInfo.getToolsInfo()).compileSdkVersion.toString(), manifestPath);
 	}
 
 	private getProjectNameFromId(): string {
@@ -234,9 +233,9 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 		return true;
 	}
 
-	public async buildProject(projectRoot: string, buildConfig?: IBuildConfig): Promise<void> {
+	public async buildProject(projectRoot: string, buildConfig: IBuildConfig): Promise<void> {
 		if (this.canUseGradle()) {
-			let buildOptions = await this.getBuildOptions();
+			let buildOptions = await this.getBuildOptions(buildConfig);
 			if (this.$logger.getLevel() === "TRACE") {
 				buildOptions.unshift("--stacktrace");
 				buildOptions.unshift("--debug");
@@ -253,7 +252,7 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 		}
 	}
 
-	private async getBuildOptions(): Promise<Array<string>> {
+	private async getBuildOptions(settings: IAndroidBuildOptionsSettings): Promise<Array<string>> {
 		await this.$androidToolsInfo.validateInfo({ showWarningsAsErrors: true, validateTargetSdk: true });
 
 		let androidToolsInfo = await this.$androidToolsInfo.getToolsInfo();
@@ -270,12 +269,12 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 			`-PgenerateTypings=${generateTypings}`
 		];
 
-		if (this.$options.release) {
+		if (settings.release) {
 			buildOptions.push("-Prelease");
-			buildOptions.push(`-PksPath=${path.resolve(this.$options.keyStorePath)}`);
-			buildOptions.push(`-Palias=${this.$options.keyStoreAlias}`);
-			buildOptions.push(`-Ppassword=${this.$options.keyStoreAliasPassword}`);
-			buildOptions.push(`-PksPassword=${this.$options.keyStorePassword}`);
+			buildOptions.push(`-PksPath=${path.resolve(settings.keyStorePath)}`);
+			buildOptions.push(`-Palias=${settings.keyStoreAlias}`);
+			buildOptions.push(`-Ppassword=${settings.keyStoreAliasPassword}`);
+			buildOptions.push(`-PksPassword=${settings.keyStorePassword}`);
 		}
 
 		return buildOptions;
@@ -387,7 +386,8 @@ export class AndroidProjectService extends projectServiceBaseLib.PlatformProject
 				}
 			}
 
-			let buildOptions = await this.getBuildOptions();
+			// We don't need release options here
+			let buildOptions = await this.getBuildOptions({ release: false });
 
 			let projectRoot = this.platformData.projectRoot;
 

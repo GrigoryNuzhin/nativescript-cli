@@ -54,12 +54,21 @@ class TestExecutionService implements ITestExecutionService {
 					let socketIoJs = (await this.$httpClient.httpRequest(socketIoJsUrl)).body;
 					this.$fs.writeFile(path.join(projectDir, TestExecutionService.SOCKETIO_JS_FILE_NAME), socketIoJs);
 
-					if (!await this.$platformService.preparePlatform(platform)) {
+					const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+					if (!await this.$platformService.preparePlatform(platform, appFilesUpdaterOptions, this.$options.platformTemplate)) {
 						this.$errors.failWithoutHelp("Verify that listed files are well-formed and try again the operation.");
 					}
 					this.detourEntryPoint(projectFilesPath);
 
-					await this.$platformService.deployPlatform(platform);
+					const deployOptions: IDeployPlatformOptions = {
+						clean: this.$options.clean,
+						device: this.$options.device,
+						projectDir: this.$options.path,
+						emulator: this.$options.emulator,
+						platformTemplate: this.$options.platformTemplate,
+						release: this.$options.release
+					};
+					await this.$platformService.deployPlatform(platform, appFilesUpdaterOptions, deployOptions);
 					await this.$usbLiveSyncService.liveSync(platform);
 
 					if (this.$options.debugBrk) {
@@ -110,16 +119,26 @@ class TestExecutionService implements ITestExecutionService {
 					this.$fs.writeFile(path.join(projectDir, TestExecutionService.CONFIG_FILE_NAME), configJs);
 				}
 
+				const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
 				// Prepare the project AFTER the TestExecutionService.CONFIG_FILE_NAME file is created in node_modules
 				// so it will be sent to device.
-				if (!await this.$platformService.preparePlatform(platform)) {
+				if (!await this.$platformService.preparePlatform(platform, appFilesUpdaterOptions, this.$options.platformTemplate)) {
 					this.$errors.failWithoutHelp("Verify that listed files are well-formed and try again the operation.");
 				}
 
 				if (this.$options.debugBrk) {
 					await this.getDebugService(platform).debug();
 				} else {
-					await this.$platformService.deployPlatform(platform);
+					const deployOptions: IDeployPlatformOptions = {
+						clean: this.$options.clean,
+						device: this.$options.device,
+						emulator: this.$options.emulator,
+						projectDir: this.$options.path,
+						platformTemplate: this.$options.platformTemplate,
+						release: this.$options.release
+					};
+
+					await this.$platformService.deployPlatform(platform, appFilesUpdaterOptions, deployOptions);
 					await this.$usbLiveSyncService.liveSync(platform);
 				}
 			};

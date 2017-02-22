@@ -8,7 +8,17 @@ export class DeployOnDeviceCommand implements ICommand {
 		private $mobileHelper: Mobile.IMobileHelper) { }
 
 	public async execute(args: string[]): Promise<void> {
-		return this.$platformService.deployPlatform(args[0], true);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		const deployOptions: IDeployPlatformOptions = {
+			clean: this.$options.clean,
+			device: this.$options.device,
+			projectDir: this.$options.path,
+			emulator: this.$options.emulator,
+			platformTemplate: this.$options.platformTemplate,
+			release: this.$options.release,
+			forceInstall: true
+		};
+		return this.$platformService.deployPlatform(args[0], appFilesUpdaterOptions, deployOptions);
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {

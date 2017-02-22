@@ -185,7 +185,7 @@ async function addDependencies(testInjector: IInjector, projectFolder: string, d
 
 async function preparePlatform(testInjector: IInjector): Promise<void> {
 	let platformService = testInjector.resolve("platformService");
-	return platformService.preparePlatform("android");
+	return platformService.preparePlatform("android", { bundle: false, release: false }, "");
 }
 
 describe("Npm support tests", () => {

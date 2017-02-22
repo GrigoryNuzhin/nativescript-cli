@@ -1,12 +1,13 @@
 export class CleanCommand implements ICommand {
 	public allowedParameters: ICommandParameter[] = [];
 
-	constructor(private $platformService: IPlatformService,
+	constructor(private $options: IOptions,
+		private $platformService: IPlatformService,
 		private $errors: IErrors) { }
 
 	public async execute(args: string[]): Promise<void> {
 		this.$platformService.removePlatforms(args);
-		await this.$platformService.addPlatforms(args);
+		await this.$platformService.addPlatforms(args, this.$options.platformTemplate);
 	}
 
 	public async canExecute(args: string[]): Promise<boolean> {

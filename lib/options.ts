@@ -41,7 +41,7 @@ export class Options extends commonOptionsLibPath.OptionsBase {
 			chrome: { type: OptionType.Boolean },
 			clean: { type: OptionType.Boolean },
 			watch: { type: OptionType.Boolean, default: true }
-		},
+			},
 			path.join($hostInfo.isWindows ? process.env.AppData : path.join(osenv.home(), ".local/share"), ".nativescript-cli"),
 			$errors, $staticConfig);
 
@@ -60,6 +60,9 @@ export class Options extends commonOptionsLibPath.OptionsBase {
 				// ignore the error - it is too early to use $logger here
 			}
 		}
+
+		let that = (<any>this);
+		that.watch = !that.justlaunch;
 	}
 }
 $injector.register("options", Options);

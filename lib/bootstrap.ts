@@ -19,7 +19,7 @@ $injector.require("projectNameService", "./services/project-name-service");
 $injector.require("tnsModulesService", "./services/tns-modules-service");
 
 $injector.require("platformsData", "./platforms-data");
-$injector.require("platformService", "./services/platform-service");
+$injector.requirePublic("platformService", "./services/platform-service");
 
 $injector.require("iOSDebugService", "./services/ios-debug-service");
 $injector.require("androidDebugService", "./services/android-debug-service");

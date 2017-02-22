@@ -5,9 +5,16 @@ export class BuildCommandBase {
 
 	public async executeCore(args: string[]): Promise<void> {
 		let platform = args[0].toLowerCase();
-		await this.$platformService.preparePlatform(platform);
+		const appFilesUpdaterOptions: IAppFilesUpdaterOptions = { bundle: this.$options.bundle, release: this.$options.release };
+		await this.$platformService.preparePlatform(platform, appFilesUpdaterOptions, this.$options.platformTemplate);
 		this.$options.clean = true;
-		await this.$platformService.buildPlatform(platform);
+		const buildConfig: IBuildConfig = {
+			buildForDevice: this.$options.forDevice,
+			projectDir: this.$options.path,
+			clean: this.$options.clean,
+			release: this.$options.release
+		};
+		await this.$platformService.buildPlatform(platform, buildConfig);
 		if (this.$options.copyTo) {
 			this.$platformService.copyLastOutput(platform, this.$options.copyTo, { isForDevice: this.$options.forDevice });
 		}

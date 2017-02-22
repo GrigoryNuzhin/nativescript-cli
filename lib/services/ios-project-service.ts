@@ -32,7 +32,6 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		private $errors: IErrors,
 		private $logger: ILogger,
 		private $iOSEmulatorServices: Mobile.IEmulatorPlatformServices,
-		private $options: IOptions,
 		private $injector: IInjector,
 		$projectDataService: IProjectDataService,
 		private $prompter: IPrompter,
@@ -75,8 +74,8 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		};
 	}
 
-	public async validateOptions(): Promise<boolean> {
-		if (this.$options.provision === true) {
+	public async validateOptions(provision: any): Promise<boolean> {
+		if (provision === true) {
 			await this.$iOSProvisionService.list();
 			this.$errors.failWithoutHelp("Please provide provisioning profile uuid or name with the --provision option.");
 			return false;
@@ -171,7 +170,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		let archivePath = options && options.archivePath ? path.resolve(options.archivePath) : path.join(projectRoot, "/build/archive/", this.$projectData.projectName + ".xcarchive");
 		let args = ["archive", "-archivePath", archivePath]
 			.concat(this.xcbuildProjectArgs(projectRoot, "scheme"));
-		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { cwd: this.$options, stdio: 'inherit' });
+		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { stdio: 'inherit' });
 		return archivePath;
 	}
 
@@ -215,7 +214,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 			"-exportPath", exportPath,
 			"-exportOptionsPlist", exportOptionsPlist
 		];
-		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { cwd: this.$options, stdio: 'inherit' });
+		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { stdio: 'inherit' });
 
 		return exportFile;
 	}
@@ -230,9 +229,9 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		}
 	}
 
-	public async buildProject(projectRoot: string, buildConfig?: IiOSBuildConfig): Promise<void> {
+	public async buildProject(projectRoot: string, buildConfig: IiOSBuildConfig): Promise<void> {
 		let basicArgs = [
-			"-configuration", this.$options.release ? "Release" : "Debug",
+			"-configuration", buildConfig.release ? "Release" : "Debug",
 			"build",
 			'SHARED_PRECOMPS_DIR=' + path.join(projectRoot, 'build', 'sharedpch')
 		];
@@ -251,8 +250,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		// 	}
 		// }
 
-		let buildForDevice = this.$options.forDevice || (buildConfig && buildConfig.buildForDevice);
-		if (buildForDevice) {
+		if (buildConfig.buildForDevice) {
 			await this.buildForDevice(projectRoot, basicArgs, buildConfig);
 		} else {
 			await this.buildForSimulator(projectRoot, basicArgs, buildConfig);
@@ -260,15 +258,15 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 
 	}
 
-	private async buildForDevice(projectRoot: string, args: string[], buildConfig?: IiOSBuildConfig): Promise<void> {
+	private async buildForDevice(projectRoot: string, args: string[], buildConfig: IiOSBuildConfig): Promise<void> {
 		let defaultArchitectures = [
 			'ARCHS=armv7 arm64',
 			'VALID_ARCHS=armv7 arm64'
 		];
 
 		// build only for device specific architecture
-		if (!this.$options.release && !(buildConfig && buildConfig.architectures)) {
-			await this.$devicesService.initialize({ platform: this.$devicePlatformsConstants.iOS.toLowerCase(), deviceId: this.$options.device });
+		if (!buildConfig.release && !buildConfig.architectures) {
+			await this.$devicesService.initialize({ platform: this.$devicePlatformsConstants.iOS.toLowerCase(), deviceId: buildConfig.device });
 			let instances = this.$devicesService.getDeviceInstances();
 			let devicesArchitectures = _(instances)
 				.filter(d => this.$mobileHelper.isiOSPlatform(d.deviceInfo.platform) && d.deviceInfo.activeArchitecture)
@@ -282,9 +280,6 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 				];
 				if (devicesArchitectures.length > 1) {
 					architectures.push('ONLY_ACTIVE_ARCH=NO');
-				}
-				if (!buildConfig) {
-					buildConfig = {};
 				}
 				buildConfig.architectures = architectures;
 			}
@@ -315,14 +310,14 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		}
 
 		// this.$logger.out("xcodebuild...");
-		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { cwd: this.$options, stdio: 'inherit' });
+		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { stdio: 'inherit' });
 		// this.$logger.out("xcodebuild build succeded.");
 
 		await this.createIpa(projectRoot);
 	}
 
-	private async setupSigningFromProvision(projectRoot: string, buildConfig?: IiOSBuildConfig): Promise<void> {
-		if (this.$options.provision) {
+	private async setupSigningFromProvision(projectRoot: string, provision?: any): Promise<void> {
+		if (provision) {
 			const pbxprojPath = path.join(projectRoot, this.$projectData.projectName + ".xcodeproj", "project.pbxproj");
 			const xcode = Xcode.open(pbxprojPath);
 			const signing = xcode.getSigning(this.$projectData.projectName);
@@ -331,7 +326,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 			if (signing && signing.style === "Manual") {
 				for (let config in signing.configurations) {
 					let options = signing.configurations[config];
-					if (options.name !== this.$options.provision && options.uuid !== this.$options.provision) {
+					if (options.name !== provision && options.uuid !== provision) {
 						shouldUpdateXcode = true;
 						break;
 					}
@@ -344,11 +339,11 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 				// This is slow, it read through 260 mobileprovision files on my machine and does quite some checking whether provisioning profiles and devices will match.
 				// That's why we try to avoid id by checking in the Xcode first.
 				const pickStart = Date.now();
-				const mobileprovision = await this.$iOSProvisionService.pick(this.$options.provision);
+				const mobileprovision = await this.$iOSProvisionService.pick(provision);
 				const pickEnd = Date.now();
 				this.$logger.trace("Searched and " + (mobileprovision ? "found" : "failed to find ") + " matching provisioning profile. (" + (pickEnd - pickStart) + "ms.)");
 				if (!mobileprovision) {
-					this.$errors.failWithoutHelp("Failed to find mobile provision with UUID or Name: " + this.$options.provision);
+					this.$errors.failWithoutHelp("Failed to find mobile provision with UUID or Name: " + provision);
 				}
 
 				xcode.setManualSigningStyle(this.$projectData.projectName, {
@@ -369,7 +364,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		}
 	}
 
-	private async setupSigningForDevice(projectRoot: string, buildConfig?: IiOSBuildConfig): Promise<void> {
+	private async setupSigningForDevice(projectRoot: string, buildConfig: IiOSBuildConfig): Promise<void> {
 		const pbxprojPath = path.join(projectRoot, this.$projectData.projectName + ".xcodeproj", "project.pbxproj");
 		const xcode = Xcode.open(pbxprojPath);
 		const signing = xcode.getSigning(this.$projectData.projectName);
@@ -377,12 +372,12 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		if ((this.readXCConfigProvisioningProfile() || this.readXCConfigProvisioningProfileForIPhoneOs()) && (!signing || signing.style !== "Manual")) {
 			xcode.setManualSigningStyle(this.$projectData.projectName);
 			xcode.save();
-		} else if (!this.$options.provision && !(signing && signing.style === "Manual" && !this.$options.teamId)) {
+		} else if (!buildConfig.provision && !(signing && signing.style === "Manual" && !buildConfig.teamId)) {
 			if (buildConfig) {
 				delete buildConfig.teamIdentifier;
 			}
 
-			const teamId = await this.getDevelopmentTeam();
+			const teamId = await this.getDevelopmentTeam(buildConfig.teamId);
 
 			xcode.setAutomaticSigningStyle(this.$projectData.projectName, teamId);
 			xcode.save();
@@ -400,7 +395,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 			"CODE_SIGN_IDENTITY="
 		]);
 
-		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { cwd: this.$options, stdio: 'inherit' });
+		await this.$childProcess.spawnFromEvent("xcodebuild", args, "exit", { stdio: 'inherit' });
 	}
 
 	private async createIpa(projectRoot: string): Promise<void> {
@@ -415,7 +410,7 @@ export class IOSProjectService extends projectServiceBaseLib.PlatformProjectServ
 		xcrunArgs.push("-verbose");
 		// }
 		// this.$logger.out("Packaging project...");
-		await this.$childProcess.spawnFromEvent("xcrun", xcrunArgs, "exit", { cwd: this.$options, stdio: 'inherit' });
+		await this.$childProcess.spawnFromEvent("xcrun", xcrunArgs, "exit", { stdio: 'inherit' });
 		// this.$logger.out("Project package succeeded.");
 	}
 
@@ -563,10 +558,10 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 		}
 	}
 
-	public async prepareProject(): Promise<void> {
-		if (this.$options.provision) {
+	public async prepareProject(provision?: any): Promise<void> {
+		if (provision) {
 			let projectRoot = path.join(this.$projectData.platformsDir, "ios");
-			await this.setupSigningFromProvision(projectRoot);
+			await this.setupSigningFromProvision(projectRoot, provision);
 		}
 
 		let project = this.createPbxProj();
@@ -607,9 +602,9 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 		this.$fs.deleteDirectory(this.getAppResourcesDestinationDirectoryPath());
 	}
 
-	public async processConfigurationFilesFromAppResources(): Promise<void> {
+	public async processConfigurationFilesFromAppResources(release: boolean): Promise<void> {
 		await this.mergeInfoPlists();
-		await this.mergeProjectXcconfigFiles();
+		await this.mergeProjectXcconfigFiles(release);
 		for (let pluginData of await this.getAllInstalledPlugins()) {
 			await this.$pluginVariablesService.interpolatePluginVariables(pluginData, this.platformData.configurationFilePath);
 		}
@@ -618,8 +613,7 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 	}
 
 	private getInfoPlistPath(): string {
-		return this.$options.baseConfig ||
-			path.join(
+		return path.join(
 				this.$projectData.projectDir,
 				constants.APP_FOLDER_NAME,
 				constants.APP_RESOURCES_FOLDER_NAME,
@@ -634,7 +628,7 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 
 	private async mergeInfoPlists(): Promise<void> {
 		let projectDir = this.$projectData.projectDir;
-		let infoPlistPath = this.$options.baseConfig || path.join(projectDir, constants.APP_FOLDER_NAME, constants.APP_RESOURCES_FOLDER_NAME, this.platformData.normalizedPlatformName, this.platformData.configurationFileName);
+		let infoPlistPath = path.join(projectDir, constants.APP_FOLDER_NAME, constants.APP_RESOURCES_FOLDER_NAME, this.platformData.normalizedPlatformName, this.platformData.configurationFileName);
 		this.ensureConfigurationFileInAppResources();
 
 		if (!this.$fs.exists(infoPlistPath)) {
@@ -989,27 +983,27 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 		await this.$childProcess.exec(`ruby -e "${mergeScript}"`);
 	}
 
-	private async mergeProjectXcconfigFiles(): Promise<void> {
-		this.$fs.deleteFile(this.$options.release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
+	private async mergeProjectXcconfigFiles(release: boolean): Promise<void> {
+		this.$fs.deleteFile(release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
 
 		let allPlugins: IPluginData[] = await (<IPluginsService>this.$injector.resolve("pluginsService")).getAllInstalledPlugins();
 		for (let plugin of allPlugins) {
 			let pluginPlatformsFolderPath = plugin.pluginPlatformsFolderPath(IOSProjectService.IOS_PLATFORM_NAME);
 			let pluginXcconfigFilePath = path.join(pluginPlatformsFolderPath, "build.xcconfig");
 			if (this.$fs.exists(pluginXcconfigFilePath)) {
-				await this.mergeXcconfigFiles(pluginXcconfigFilePath, this.$options.release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
+				await this.mergeXcconfigFiles(pluginXcconfigFilePath, release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
 			}
 		}
 
 		let appResourcesXcconfigPath = path.join(this.$projectData.projectDir, constants.APP_FOLDER_NAME, constants.APP_RESOURCES_FOLDER_NAME, this.platformData.normalizedPlatformName, "build.xcconfig");
 		if (this.$fs.exists(appResourcesXcconfigPath)) {
-			await this.mergeXcconfigFiles(appResourcesXcconfigPath, this.$options.release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
+			await this.mergeXcconfigFiles(appResourcesXcconfigPath, release ? this.pluginsReleaseXcconfigFilePath : this.pluginsDebugXcconfigFilePath);
 		}
 
 		let podFilesRootDirName = path.join("Pods", "Target Support Files", `Pods-${this.$projectData.projectName}`);
 		let podFolder = path.join(this.platformData.projectRoot, podFilesRootDirName);
 		if (this.$fs.exists(podFolder)) {
-			if (this.$options.release) {
+			if (release) {
 				await this.mergeXcconfigFiles(path.join(this.platformData.projectRoot, podFilesRootDirName, `Pods-${this.$projectData.projectName}.release.xcconfig`), this.pluginsReleaseXcconfigFilePath);
 			} else {
 				await this.mergeXcconfigFiles(path.join(this.platformData.projectRoot, podFilesRootDirName, `Pods-${this.$projectData.projectName}.debug.xcconfig`), this.pluginsDebugXcconfigFilePath);
@@ -1122,13 +1116,8 @@ We will now place an empty obsolete compatability white screen LauncScreen.xib f
 		return this.readXCConfig("PROVISIONING_PROFILE[sdk=iphoneos*]");
 	}
 
-	private async getDevelopmentTeam(): Promise<string> {
-		let teamId: string;
-		if (this.$options.teamId) {
-			teamId = this.$options.teamId;
-		} else {
-			teamId = this.readTeamId();
-		}
+	private async getDevelopmentTeam(teamId?: string): Promise<string> {
+		teamId = teamId || this.readTeamId();
 
 		if (!teamId) {
 			let teams = this.getDevelopmentTeams();

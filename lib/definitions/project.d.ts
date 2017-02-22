@@ -111,15 +111,17 @@ interface IPlatformProjectServiceBase {
 	getPluginPlatformsFolderPath(pluginData: IPluginData, platform: string): string;
 }
 
-interface IBuildConfig {
-	buildForDevice?: boolean;
+interface IBuildConfig extends IAndroidBuildOptionsSettings {
+	buildForDevice: boolean;
+	projectDir: string;
+	clean?: boolean;
 	architectures?: string[];
 }
 
 /**
  * Describes iOS-specific build configuration properties
  */
-interface IiOSBuildConfig extends IBuildConfig {
+interface IiOSBuildConfig extends IBuildConfig, IRelease, IDeviceIdentifier, IProvision, ITeamIdentifier {
 	/**
 	 * Identifier of the mobile provision which will be used for the build. If not set a provision will be selected automatically if possible.
 	 */
@@ -139,7 +141,7 @@ interface IPlatformProjectService {
 	validate(): Promise<void>;
 	createProject(frameworkDir: string, frameworkVersion: string, pathToTemplate?: string): Promise<void>;
 	interpolateData(): Promise<void>;
-	interpolateConfigurationFile(configurationFilePath?: string): Promise<void>;
+	interpolateConfigurationFile(sdk?: string): Promise<void>;
 
 	/**
 	 * Executes additional actions after native project is created.
@@ -150,16 +152,19 @@ interface IPlatformProjectService {
 
 	/**
 	 * Gets first chance to validate the options provided as command line arguments.
+	 * @param {any} provision UUID of the provisioning profile used in iOS option validation.
+	 * @returns {void}
 	 */
-	validateOptions(): Promise<boolean>;
+	validateOptions(provision?: any): Promise<boolean>;
 
-	buildProject(projectRoot: string, buildConfig?: IBuildConfig): Promise<void>;
+	buildProject(projectRoot: string, buildConfig: IBuildConfig): Promise<void>;
 
 	/**
 	 * Prepares images in Native project (for iOS).
+	 * @param {any} provision UUID of the provisioning profile used in iOS project preparation.
 	 * @returns {void}
 	 */
-	prepareProject(): Promise<void>;
+	prepareProject(provision?: any): Promise<void>;
 
 	/**
 	 * Prepares App_Resources in the native project by clearing data from other platform and applying platform specific rules.
@@ -201,7 +206,7 @@ interface IPlatformProjectService {
 	getAppResourcesDestinationDirectoryPath(): string;
 
 	deploy(deviceIdentifier: string): Promise<void>;
-	processConfigurationFilesFromAppResources(): Promise<void>;
+	processConfigurationFilesFromAppResources(release: boolean): Promise<void>;
 
 	/**
 	 * Ensures there is configuration file (AndroidManifest.xml, Info.plist) in app/App_Resources.
